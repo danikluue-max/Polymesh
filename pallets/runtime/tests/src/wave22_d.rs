@@ -165,10 +165,20 @@ fn wave22_d01_subsidy_filter_bypass_via_multisig() {
 fn do_wave22_d01() {
     System::set_block_number(1);
     // A = subsidiser (Alice), K = subsidised paying key (Bob),
-    // Attacker = multisig signer (Charlie).
+    // Attacker = multisig signer (Dave — raw account, see below).
     let alice = User::new(Sr25519Keyring::Alice);
     let k = User::new(Sr25519Keyring::Bob);
-    let attacker = User::new(Sr25519Keyring::Charlie);
+    // RUN 5 FIX: the attacker MUST be a raw account with no identity.
+    // `User::new(Charlie)` registers Charlie's key as the primary key of
+    // its own DID, and `base_accept_multisig_signer`
+    // (pallets/multisig/src/lib.rs) rejects any signer key already linked
+    // to an identity (`SignerAlreadyLinkedToIdentity`): a multisig signer
+    // is a bare key, never a DID holder. The repo's own multisig tests use
+    // raw keyring accounts as signers for the same reason
+    // (pallets/runtime/tests/src/multisig.rs `create_multisig_required_signers`).
+    // Dave is unused in this test and has no DID here.
+    let attacker = Sr25519Keyring::Dave.to_account_id();
+    let attacker_origin = RuntimeOrigin::signed(attacker.clone());
 
     let limit = 100 * POLY;
     setup_subsidy(k, alice, limit);
@@ -202,12 +212,12 @@ fn do_wave22_d01() {
     // 1-of-1, so the attacker's proposal executes immediately.
     let ms_address = create_multisig_default_perms(
         k.acc(),
-        create_signers(vec![k.acc(), attacker.acc()]),
+        create_signers(vec![k.acc(), attacker.clone()]),
         1,
     );
-    let auth_id = get_last_auth_id(&Signatory::Account(attacker.acc()));
+    let auth_id = get_last_auth_id(&Signatory::Account(attacker.clone()));
     assert_ok!(MultiSig::accept_multisig_signer(
-        attacker.origin(),
+        attacker_origin.clone(),
         auth_id
     ));
     // Sanity: the multisig's fee payer really is K.
@@ -220,7 +230,7 @@ fn do_wave22_d01() {
                 proposal: Box::new(call_system_remark(1)),
                 expiry: None,
             }),
-            attacker.acc(),
+            attacker.clone(),
         )
         .map(|info| info.paying_account().clone()),
         Ok(k.acc()),
@@ -229,7 +239,7 @@ fn do_wave22_d01() {
 
     let alice_before = Balances::free_balance(&alice.acc());
     let k_before = Balances::free_balance(&k.acc());
-    let attacker_before = Balances::free_balance(&attacker.acc());
+    let attacker_before = Balances::free_balance(&attacker);
     let remaining_before = get_subsidy(&k.acc()).unwrap().remaining;
 
     // The excluded payload: Utility::batch_all of System remarks — Utility
@@ -245,7 +255,7 @@ fn do_wave22_d01() {
         proposal: Box::new(inner),
         expiry: None,
     });
-    let dispatch_result = dispatch_with_payment(attacker.origin(), call, 100, 10);
+    let dispatch_result = dispatch_with_payment(attacker_origin, call, 100, 10);
     let dispatch_ok = dispatch_result.is_ok();
     assert!(
         dispatch_ok,
@@ -255,7 +265,7 @@ fn do_wave22_d01() {
     let remaining_after = get_subsidy(&k.acc()).unwrap().remaining;
     let alice_paid = alice_before - Balances::free_balance(&alice.acc());
     let k_paid = k_before - Balances::free_balance(&k.acc());
-    let attacker_paid = attacker_before - Balances::free_balance(&attacker.acc());
+    let attacker_paid = attacker_before - Balances::free_balance(&attacker);
     let subsidy_spent = remaining_before - remaining_after;
     let proposal_executed = pallet_multisig::ProposalStates::<TestStorage>::get(&ms_address, 0)
         == Some(ProposalState::ExecutionSuccessful);
