@@ -18,6 +18,7 @@
 use frame_support::dispatch::{DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo};
 use frame_support::weights::Weight;
 use frame_support::assert_ok;
+use frame_support::pallet_prelude::Zero;
 use pallet_balances::Call as BalancesCall;
 use pallet_relayer::{RelayTxNonces, Subsidies, Subsidy};
 use polymesh_primitives::crypto::{ChainScopedMessage, RELAY_TX_LABEL};
@@ -78,7 +79,7 @@ fn post_info_from_weight(w: u64) -> PostDispatchInfo {
 }
 
 fn get_subsidy(user: &AccountId) -> Option<Subsidy<AccountId>> {
-    Subsidies::get(user)
+    Subsidies::<TestStorage>::get(user)
 }
 
 /// Setup a subsidy with `payer` paying for `user` (same as relayer_test.rs).
@@ -112,7 +113,7 @@ fn dispatch_with_payment(
     origin: RuntimeOrigin,
     call: RuntimeCall,
     call_weight: u64,
-    len: u32,
+    len: usize,
 ) -> frame_support::dispatch::DispatchResultWithPostInfo {
     let call_info = info_from_weight(call_weight);
     let val = ChargeTransactionPayment::from(0)
@@ -324,8 +325,8 @@ fn do_wave22_d02() {
             Some(&excluded),
         );
     let filter_applies = with_call
-        == Err(TransactionValidityError::Invalid(
-            InvalidTransaction::Custom(TransactionError::PalletNotSubsidised as u8),
+        == Err(InvalidTransaction::Custom(
+            TransactionError::PalletNotSubsidised as u8,
         ));
     let without_call =
         <Relayer as SubsidiserTrait<AccountId, RuntimeCall>>::check_subsidy(
@@ -342,7 +343,10 @@ fn do_wave22_d02() {
     TestStorage::set_payer_context(Some(k.acc()));
     let charge = ProtocolFee::charge_fees(&[ProtocolOp::AssetCreateAsset]);
     TestStorage::set_payer_context(None);
-    assert_ok!(charge, "charge_fees must succeed");
+    assert!(
+        charge.is_ok(),
+        "charge_fees must succeed, got {charge:?}"
+    );
 
     let remaining_after = get_subsidy(&k.acc()).unwrap().remaining;
     let alice_paid = alice_before - Balances::free_balance(&alice.acc());
