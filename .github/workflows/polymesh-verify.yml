@@ -49,6 +49,8 @@ jobs:
     steps:
       - name: Checkout verify branch
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Show pinned commit (branch must descend from b3a88452 = upstream v8.2.0)
         run: |
