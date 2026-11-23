@@ -1,0 +1,98 @@
+# Polymesh Wave 22 verification — runs the wave22_* reproduction tests on
+# GitHub-hosted runners (16 GB RAM) because the sandbox cannot build Substrate.
+#
+# Branching / pinning (IMPORTANT):
+# - The fork danikluue-max/Polymesh carries NO tags (verified via GitHub API
+#   24 Nov 2026: tags list is empty). Do NOT `git checkout v8.2.0` here.
+# - The verify branch `wave22-verify` is created from the fork's `develop`
+#   branch at commit b3a88452e0516f017e54b515d96b45dfcb87386b, which IS the
+#   upstream v8.2.0 commit. This workflow simply checks out the branch it
+#   runs on; the first step verifies the branch DESCENDS from that commit
+#   (HEAD itself is a later commit — the push adds the 5 wave22 files on
+#   top) and that only those 5 files differ from the pinned commit.
+# - Test files live in pallets/runtime/tests/src/wave22_{a,b,d}.rs, registered
+#   in pallets/runtime/tests/src/lib.rs (`mod wave22_a;` etc.).
+#
+# Verdict semantics (see PUSH-PLAN.md):
+# - Each wave22_* test asserts the claimed buggy behaviour.
+# - Test PASS  => finding CONFIRMED.  Test FAIL => finding REFUTED.
+# - Every test also prints a `WAVE22 <ID>: CONFIRMED|REFUTED ...` line; the
+#   "Verdict summary" step greps those lines out of the run log, and the full
+#   log is uploaded as an artifact.
+# - `--no-fail-fast` is deliberate: a REFUTED item must not hide the other
+#   verdicts.
+#
+# Cost: $0 — public repo fork, GitHub Actions free tier for public repos.
+
+name: Polymesh Wave 22 verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: "Nextest test-name filter (default runs all wave22_* tests)"
+        required: false
+        default: "wave22"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SKIP_WASM_BUILD: "1"
+      RUST_BACKTRACE: "1"
+      RUSTFLAGS: "-D warnings"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout verify branch
+        uses: actions/checkout@v4
+
+      - name: Show pinned commit (branch must descend from b3a88452 = upstream v8.2.0)
+        run: |
+          git log --oneline -3
+          git merge-base --is-ancestor b3a88452e0516f017e54b515d96b45dfcb87386b HEAD
+          echo "--- files changed vs pinned commit (must be only the 5 wave22 files) ---"
+          git diff --name-only b3a88452e0516f017e54b515d96b45dfcb87386b HEAD
+
+      - name: Install Rust toolchain (pinned nightly-2026-09-01)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-09-01
+          components: rust-src, rustfmt
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: wave22-verify
+          shared-key: polymesh-wave22
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Run Wave 22 verification tests
+        run: |
+          set +e
+          cargo nextest run --package polymesh-runtime-tests --no-fail-fast "${{ inputs.test_filter }}" -- --nocapture 2>&1 | tee wave22-run.log
+          echo "NEXTEST_EXIT=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+          set -e
+
+      - name: Verdict summary
+        if: always()
+        run: |
+          echo "=== WAVE22 verdict lines ==="
+          grep -E "WAVE22 (A|B|D)-[0-9]+:" wave22-run.log || echo "(no WAVE22 verdict lines found in log)"
+          echo "=== nextest exit code (0 = all CONFIRMED, non-zero = at least one REFUTED/failed) ==="
+          echo "NEXTEST_EXIT=${NEXTEST_EXIT:-unknown}"
+          echo "=== test-result lines ==="
+          grep -E "test result" wave22-run.log | tail -10 || true
+
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave22-run-log
+          path: wave22-run.log
+          retention-days: 30
