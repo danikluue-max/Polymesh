@@ -78,8 +78,11 @@ jobs:
         run: |
           set +e
           cargo nextest run --package polymesh-runtime-tests --no-fail-fast "${{ inputs.test_filter }}" -- --nocapture 2>&1 | tee wave22-run.log
-          echo "NEXTEST_EXIT=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
-          set -e
+          NEXTEST_EXIT=${PIPESTATUS[0]}
+          echo "NEXTEST_EXIT=$NEXTEST_EXIT" >> "$GITHUB_ENV"
+          # Fail the job when nextest fails (compile error or REFUTED test),
+          # otherwise the tee pipeline masks the failure and the run looks green.
+          exit "$NEXTEST_EXIT"
 
       - name: Verdict summary
         if: always()
