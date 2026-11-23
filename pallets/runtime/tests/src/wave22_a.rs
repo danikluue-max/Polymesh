@@ -37,6 +37,7 @@ use frame_support::{assert_noop, assert_ok};
 
 use sp_core::H256;
 use sp_keyring::Sr25519Keyring;
+use sp_runtime::traits::Hash;
 
 use pallet_committee::{self as committee, Event as CommitteeRawEvent};
 use pallet_committee::{Members, Proposals, Voting};
