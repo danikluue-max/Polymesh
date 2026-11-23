@@ -40,3 +40,7 @@ mod transaction_payment_test;
 mod transfer_compliance_test;
 mod treasury_test;
 mod utility_test;
+
+mod wave22_a;
+mod wave22_b;
+mod wave22_d;
