@@ -323,7 +323,7 @@ fn b01_locked_execution_partial_settlement_via_frozen_nft() {
         let bob = User::new(Sr25519Keyring::Bob);
         let dave = User::new(Sr25519Keyring::Dave);
         let alice_default = PortfolioId::default_portfolio(alice.did);
-        let bob_default = PortfolioId::default_portfolio(bob.did);
+        let _bob_default = PortfolioId::default_portfolio(bob.did);
 
         // 2-leg instruction: 1_000 fungible Alice -> Bob, NFT #1 Alice -> Bob.
         // Dave (mediator) created/issued both assets, so he can freeze the NFT.
