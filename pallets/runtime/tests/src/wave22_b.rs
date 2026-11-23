@@ -243,7 +243,7 @@ fn b01_locked_execution_partial_settlement_via_deleted_receiver_portfolio() {
             Settlement::lock_instruction(dave.origin(), InstructionId(0), Weight::MAX);
         let relock_is_already_locked = matches!(
             &relock_res,
-            Err(e) if e.error == SettlementError::InstructionAlreadyLocked.into()
+            Err(e) if e.error == SettlementError::<TestStorage>::InstructionAlreadyLocked.into()
         );
         assert_ok!(Settlement::reject_instruction_as_mediator(
             dave.origin(),
@@ -378,7 +378,7 @@ fn b01_locked_execution_partial_settlement_via_frozen_nft() {
             Settlement::lock_instruction(dave.origin(), InstructionId(0), Weight::MAX);
         let relock_is_already_locked = matches!(
             &relock_res,
-            Err(e) if e.error == SettlementError::InstructionAlreadyLocked.into()
+            Err(e) if e.error == SettlementError::<TestStorage>::InstructionAlreadyLocked.into()
         );
         assert_ok!(Settlement::reject_instruction_as_mediator(
             dave.origin(),
@@ -744,7 +744,7 @@ fn b02_sub_unit_price_single_token_costs_zero() {
             // earlier check (e.g. minimum investment or venue).
             let err_is_zero_amount = matches!(
                 &res,
-                Err(e) if *e == SettlementError::ZeroAmount.into()
+                Err(e) if *e == SettlementError::<TestStorage>::ZeroAmount.into()
             );
             let remaining = Fundraisers::<TestStorage>::get(offering_asset, fundraiser_id)
                 .unwrap()
